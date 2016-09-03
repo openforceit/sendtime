@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
-from flask import Flask,
+from flask import Flask, request
 #from odooTimereg import OdooTimereg
 
 app = Flask(__name__)
