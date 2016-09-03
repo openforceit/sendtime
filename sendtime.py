@@ -10,4 +10,4 @@ app.config.from_envvar("SENDTIME_SETTINGS")
 @app.route('/api/timesheet')
 def get_timesheet():
 	user = request.environ.get('REMOTE_USER')
-	return "User: %s".format(user)
+	return "User: %s" % user
