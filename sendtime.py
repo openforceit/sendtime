@@ -15,7 +15,7 @@ cache = SimpleCache()
 def current_user():
 	user = request.environ.get('REMOTE_USER')
 	if user is None:
-		if app.config["DEBUG"] != 0 or True:
+		if app.config["DEBUG"] != 0:
 			user = "rasky"
 		else:
 			abort(400, {'error': 'REMOTE_USER not provided'})
