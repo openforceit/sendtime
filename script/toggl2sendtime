@@ -1,0 +1,80 @@
+#!/usr/bin/env python
+#
+# toggl2sendtime - Sync Toggl time entries to OpenERP via Sendtime
+#
+# Maintained by: Lorenzo Villani <lvillani@develer.com>
+#
+# NOTE: Don't make changes to this file yourself unless it's a critical bug-
+# fix, please.
+#
+
+from __future__ import print_function
+
+import datetime
+
+import requests
+
+import dateutil.parser
+
+TOGGL_API_TOKEN = ""
+TOGGL_CLIENT_ID = ""
+TOGGL_END_DATE = ""  # YYYY-MM-DD
+TOGGL_REPORT_API = "https://toggl.com/reports/api/v2/details"
+TOGGL_START_DATE = ""  # YYYY-MM-DD
+TOGGL_WORKSPACE_ID = ""
+
+SENDTIME_AUTH = ("", "")  # (develer username, password)
+SENDTIME_API = "https://sendtime.develer.com/api/timesheet"
+
+MINUTE = 60  # Seconds
+
+
+def main():
+    toggl_entries = get_toggl_entries()
+    sendtime_entries = toggl_to_sendtime(toggl_entries)
+
+    post_to_sendtime(sendtime_entries)
+
+
+def post_to_sendtime(sendtime_entries):
+    for entry in sendtime_entries:
+        response = requests.post(SENDTIME_API, auth=SENDTIME_AUTH, json=entry)
+
+        if response.code != 200:
+            print("Failed to send:", entry)
+            print("Response:", response.text)
+            return
+
+
+def toggl_to_sendtime(toggl_entries):
+    def duration(start, end):
+        return ((dateutil.parser.parse(end) - dateutil.parser.parse(start)).seconds) / MINUTE
+
+    def date(start):
+        return datetime.datetime.strftime(dateutil.parser.parse(start), "%Y-%m-%d")
+
+    return [{
+        "date": str(date(entry["start"])),
+        "description": str(entry["description"]),
+        "duration": str(duration(entry["start"], entry["end"])),
+        "project": str(entry["project"]),
+    } for entry in toggl_entries["data"]]
+
+
+def get_toggl_entries():
+    args = {
+        "auth": (TOGGL_API_TOKEN, "api_token"),
+        "params": {
+            "client_id": TOGGL_CLIENT_ID,
+            "since": TOGGL_START_DATE,
+            "until": TOGGL_END_DATE,
+            "user_agent": "lorenzo@villani.me",
+            "workspace_id": TOGGL_WORKSPACE_ID,
+        },
+    }
+
+    return requests.get(TOGGL_REPORT_API, **args).json()
+
+
+if __name__ == "__main__":
+    main()
