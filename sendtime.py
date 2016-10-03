@@ -97,8 +97,10 @@ def get_timesheet():
 	projectid = pids[0]["id"]
 
 	# Search for a draft timesheet for this user
+    # NOTE: some timesheets are in state "draft_positive". Not sure what
+    # that means, but they must be matched here
 	sheetid = client.Hr_timesheet_sheetSheet.search(
-		["state=draft", "user_id=%d" % userid, "date_from=%04d-%02d-01" % (date.year, date.month)],
+		["state like draft%", "user_id=%d" % userid, "date_from=%04d-%02d-01" % (date.year, date.month)],
 	)
 	if len(sheetid) == 0:
 		abort(400, {'error': 'no draft timesheet found for this user for the specified month'})
