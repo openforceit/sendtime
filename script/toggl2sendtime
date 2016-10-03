@@ -8,42 +8,91 @@
 # fix, please.
 #
 
-from __future__ import print_function
+from __future__ import print_function, unicode_literals
 
+import argparse
+import calendar
 import datetime
+import getpass
 
+import keyring
 import requests
 
 import dateutil.parser
 
-TOGGL_API_TOKEN = ""
-TOGGL_CLIENT_ID = ""
-TOGGL_END_DATE = ""  # YYYY-MM-DD
-TOGGL_REPORT_API = "https://toggl.com/reports/api/v2/details"
-TOGGL_START_DATE = ""  # YYYY-MM-DD
-TOGGL_WORKSPACE_ID = ""
+DATE_FORMAT = "%Y-%m-%d"
 
-SENDTIME_AUTH = ("", "")  # (develer username, password)
-SENDTIME_API = "https://sendtime.develer.com/api/timesheet"
+ENDPOINT_SENDTIME = "https://sendtime.develer.com/api/timesheet"
+ENDPOINT_TOGGL_REPORT = "https://toggl.com/reports/api/v2/details"
+
+KEYRING_SENDTIME_PASSWORD = "sendtime-password"
+KEYRING_SENDTIME_USERNAME = "sendtime-username"
+KEYRING_SERVICE = "toggl2sendtime"
+KEYRING_TOGGL_API_TOKEN = "toggl-api-token"
+KEYRING_TOGGL_CLIENT_ID = "toggl-client-id"
+KEYRING_TOGGL_WORKSPACE_ID = "toggl-workspace-id"
 
 MINUTE = 60  # Seconds
 
 
 def main():
-    toggl_entries = get_toggl_entries()
+    args = parse_args()
+
+    configure(force=args.configure)
+
+    toggl_entries = get_toggl_entries(args.start_date, args.end_date)
     sendtime_entries = toggl_to_sendtime(toggl_entries)
 
     post_to_sendtime(sendtime_entries)
 
 
-def post_to_sendtime(sendtime_entries):
-    for entry in sendtime_entries:
-        response = requests.post(SENDTIME_API, auth=SENDTIME_AUTH, json=entry)
+def parse_args():
+    default_start, default_end = compute_start_and_end_dates()
 
-        if response.code != 200:
-            print("Failed to send:", entry)
-            print("Response:", response.text)
-            return
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("-c", "--configure", action="store_true", help="Reconfigure?")
+    parser.add_argument("-s", "--start", default=default_start, help="Start date")
+    parser.add_argument("-e", "--end", default=default_end, help="End date")
+
+    return parser.parse_args()
+
+
+def compute_start_and_end_dates():
+    # FIXME: This fails on January
+    now = datetime.datetime.now()
+    monthrange = calendar.monthrange(now.year, now.month - 1)
+    start = now.replace(month=now.month - 1, day=1)
+    end = now.replace(month=now.month - 1, day=monthrange[1])
+
+    return start.strftime(DATE_FORMAT), end.strftime(DATE_FORMAT)
+
+
+def configure(force):
+    def prompt_and_save(prompt, secret_name):
+        secret = keyring.get_password(KEYRING_SERVICE, secret_name)
+        if force or not secret:
+            keyring.set_password(KEYRING_SERVICE, secret_name, getpass.getpass(prompt))
+
+    prompt_and_save("Toggl API Key: ", KEYRING_TOGGL_API_TOKEN)
+    prompt_and_save("Toggl Client ID: ", KEYRING_TOGGL_CLIENT_ID)
+    prompt_and_save("Toggl Workspace ID: ", KEYRING_TOGGL_WORKSPACE_ID)
+    prompt_and_save("Sendtime username: ", KEYRING_SENDTIME_USERNAME)
+    prompt_and_save("Sendtime password: ", KEYRING_SENDTIME_PASSWORD)
+
+
+def get_toggl_entries(start_date, end_date):
+    args = {
+        "auth": (get_password(KEYRING_TOGGL_API_TOKEN), "api_token"),
+        "params": {
+            "client_id": get_password(KEYRING_TOGGL_CLIENT_ID),
+            "since": start_date,
+            "until": end_date,
+            "user_agent": "lorenzo@villani.me",
+            "workspace_id": get_password(KEYRING_TOGGL_WORKSPACE_ID),
+        },
+    }
+
+    return requests.get(ENDPOINT_TOGGL_REPORT, **args).json()
 
 
 def toggl_to_sendtime(toggl_entries):
@@ -54,26 +103,28 @@ def toggl_to_sendtime(toggl_entries):
         return datetime.datetime.strftime(dateutil.parser.parse(start), "%Y-%m-%d")
 
     return [{
-        "date": str(date(entry["start"])),
-        "description": str(entry["description"]),
-        "duration": str(duration(entry["start"], entry["end"])),
-        "project": str(entry["project"]),
+        "date": date(entry["start"]),
+        "description": entry["description"],
+        "duration": duration(entry["start"], entry["end"]),
+        "project": entry["project"],
     } for entry in toggl_entries["data"]]
 
 
-def get_toggl_entries():
-    args = {
-        "auth": (TOGGL_API_TOKEN, "api_token"),
-        "params": {
-            "client_id": TOGGL_CLIENT_ID,
-            "since": TOGGL_START_DATE,
-            "until": TOGGL_END_DATE,
-            "user_agent": "lorenzo@villani.me",
-            "workspace_id": TOGGL_WORKSPACE_ID,
-        },
-    }
+def post_to_sendtime(sendtime_entries):
+    username = keyring.get_password(KEYRING_SERVICE, KEYRING_SENDTIME_USERNAME)
+    password = keyring.get_password(KEYRING_SERVICE, KEYRING_SENDTIME_PASSWORD)
 
-    return requests.get(TOGGL_REPORT_API, **args).json()
+    for entry in sendtime_entries:
+        response = requests.post(ENDPOINT_SENDTIME, auth=(username, password), json=entry)
+
+        if response.code != 200:
+            print("Failed to send:", entry)
+            print("Response:", response.text)
+            return
+
+
+def get_password(secret_name):
+    return keyring.get_password(KEYRING_SERVICE, secret_name)
 
 
 if __name__ == "__main__":
