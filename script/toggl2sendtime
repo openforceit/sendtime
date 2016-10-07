@@ -7,6 +7,10 @@
 # NOTE: Don't make changes to this file yourself unless it's a critical bug-
 # fix, please.
 #
+# TODO:
+#
+# - Add dry-run mode.
+#
 
 from __future__ import print_function, unicode_literals
 
