@@ -7,10 +7,6 @@
 # NOTE: Don't make changes to this file yourself unless it's a critical bug-
 # fix, please.
 #
-# TODO:
-#
-# - Add dry-run mode.
-#
 
 from __future__ import print_function, unicode_literals
 
@@ -18,6 +14,7 @@ import argparse
 import calendar
 import datetime
 import getpass
+import pprint
 
 import keyring
 import requests
@@ -44,10 +41,13 @@ def main():
 
     configure(force=args.configure)
 
-    toggl_entries = get_toggl_entries(args.start_date, args.end_date)
+    toggl_entries = get_toggl_entries(args.start, args.end)
     sendtime_entries = toggl_to_sendtime(toggl_entries)
 
-    post_to_sendtime(sendtime_entries)
+    if args.dry_run:
+        pprint.pprint(sendtime_entries)
+    else:
+        post_to_sendtime(sendtime_entries)
 
 
 def parse_args():
@@ -55,8 +55,9 @@ def parse_args():
 
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-c", "--configure", action="store_true", help="Reconfigure?")
-    parser.add_argument("-s", "--start", default=default_start, help="Start date")
     parser.add_argument("-e", "--end", default=default_end, help="End date")
+    parser.add_argument("-n", "--dry-run", action="store_true", help="Dry run")
+    parser.add_argument("-s", "--start", default=default_start, help="Start date")
 
     return parser.parse_args()
 
@@ -124,7 +125,7 @@ def post_to_sendtime(sendtime_entries):
     for entry in sendtime_entries:
         response = requests.post(ENDPOINT_SENDTIME, auth=(username, password), json=entry)
 
-        if response.code != 200:
+        if response.status_code != 200:
             print("Failed to send:", entry)
             print("Response:", response.text)
             return
