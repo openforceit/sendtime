@@ -1,2 +1,4 @@
 keyring
+keyrings.alt
+python.dateutil
 requests
