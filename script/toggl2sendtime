@@ -65,10 +65,14 @@ def parse_args():
 def compute_start_and_end_dates():
     now = datetime.datetime.now()
     monthrange = calendar.monthrange(now.year, previous_month(now))
-    start = now.replace(month=previous_month(now), day=1)
-    end = now.replace(month=previous_month(now), day=monthrange[1])
+    start = now.replace(year=previous_year(now), month=previous_month(now), day=1)
+    end = now.replace(year=previous_year(now), month=previous_month(now), day=monthrange[1])
 
     return start.strftime(DATE_FORMAT), end.strftime(DATE_FORMAT)
+
+
+def previous_year(now):
+    return now.year - 1 if now.month == 1 else now.year
 
 
 def previous_month(now):
