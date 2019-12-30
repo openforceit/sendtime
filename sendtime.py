@@ -62,6 +62,11 @@ def server_error(e):
         {"error": "internal server error", "exception": str(e)}), 500
 
 
+@app.route('/check')
+def check():
+    return jsonify({'message': 'It works!'})
+
+
 @app.route('/api/timesheet', methods=["POST"])
 def get_timesheet():
     login, userid, pwd = current_user()
