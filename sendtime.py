@@ -139,6 +139,7 @@ def get_timesheet():
         'project_id': projectid,
         'name': desc,
         'unit_amount': float(minutes)/60,
+        'user_id': userid,
     })
 
     return jsonify({
