@@ -7,6 +7,7 @@ import os
 import erppeek
 import time
 import datetime
+from calendar import monthrange
 
 
 app = Flask(__name__)
@@ -99,9 +100,9 @@ def get_timesheet():
         abort(400, {'error': 'project not provided'})
 
     # Extract project id from OpenERP (with unambiguous match)
-    pids = client.AccountAnalyticAccount.read(
-        ["use_timesheets=True", "state=open", "name ilike " + proj],
-        fields=["name"])
+    pids = client.ProjectProject.read([('active', '=', True),
+                                       ('name', 'ilike', proj), ],
+                                      fields=["name"])
     if len(pids) == 0:
         abort(400, {'error': 'no project found matching %s' % proj})
     elif len(pids) > 1:
@@ -113,13 +114,16 @@ def get_timesheet():
     projectid = pids[0]["id"]
 
     # Search for a draft timesheet for this user
-    # NOTE: some timesheets are in state "draft_positive". Not sure what
-    # that means, but they must be matched here
-    sheetid = client.Hr_timesheet_sheetSheet.search(
-        ["state like draft%",
-         "user_id=%d" % userid,
-         "date_from=%04d-%02d-01" % (date.year, date.month)],
-    )
+    sheetid = client.Hr_timesheetSheet.search([
+        ('state', 'in', ('draft', 'new')),
+        ('user_id', '=', userid),
+        ('date_start', '>=', '%04d-%02d-01' % (date.year, date.month)),
+        ('date_end', '<=', '%04d-%02d-%02d' % (
+            date.year,
+            date.month,
+            monthrange(date.year, date.month)[1],
+            ))
+        ])
     if len(sheetid) == 0:
         abort(
             400,
@@ -130,14 +134,11 @@ def get_timesheet():
     sheetid = sheetid[0]
 
     # Now create a registration
-    newrecord = client.HrAnalyticTimesheet.create({
-        "journal_id": 6,  # Hard-coded timesheet journal used by Develer
-        "account_id": projectid,
-        "sheet_id": sheetid,
-        "date": date.strftime("%Y-%m-%d"),
-        "unit_amount": float(minutes)/60,
-        "user_id": userid,
-        "name": desc,
+    newrecord = client.AccountAnalyticLine.create({
+        'date': date.strftime('%Y-%m-%d'),
+        'project_id': projectid,
+        'name': desc,
+        'unit_amount': float(minutes)/60,
     })
 
     return jsonify({
