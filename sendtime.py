@@ -3,7 +3,7 @@
 
 from flask import Flask, request, jsonify, abort
 from werkzeug.contrib.cache import SimpleCache
-import os
+from secrets import token_hex
 import erppeek
 import time
 import datetime
@@ -40,7 +40,7 @@ def current_user():
         # or they have a manually generated password that we don't trust.
         # Let's replace it.
         if len(record["password"]) < 32:
-            newpwd = os.urandom(16).encode("hex")
+            newpwd = token_hex(16)
             client.ResUsers.write(record["id"], {"password": newpwd})
             record["password"] = newpwd
 
