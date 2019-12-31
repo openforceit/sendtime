@@ -15,46 +15,26 @@ app.config.from_envvar("SENDTIME_SETTINGS")
 cache = SimpleCache()
 
 
-def current_user():
+def current_user(client):
     user = request.environ.get('REMOTE_USER')
     if user is None:
         if app.config["DEBUG"] != 0:
             user = "rasky"
         else:
             abort(400, {'error': 'REMOTE_USER not provided'})
-
-    # See if we have a client already in list
-    pwd = cache.get("pwd:" + user)
-    if pwd is None:
-        # Login as admin to retrieve userid and password for this user
-        # NOTE: Odoo saves passwords in clear... furtunately, we don't store
-        # the real passwords here (because we authenticate via SSO), but just
-        # a random-generated password.
-        client = odoo_client(
-            app.config["ODOO_USER"], app.config["ODOO_PASSWORD"])
-        record = client.ResUsers.read(
-            ["login="+user], fields=["id", "password"])[0]
-
-        # Some users have no password
-        # (so login it's impossible with erppeek),
-        # or they have a manually generated password that we don't trust.
-        # Let's replace it.
-        if len(record["password"]) < 32:
-            newpwd = token_hex(16)
-            client.ResUsers.write(record["id"], {"password": newpwd})
-            record["password"] = newpwd
-
-        cache.set("id:"+user, record["id"])
-        cache.set("pwd:"+user, record["password"])
-
-    return user, cache.get("id:"+user), cache.get("pwd:"+user)
+    # Retrieve odoo user id of this user
+    record = client.ResUsers.read([('login', '=', user)], fields=["id"])
+    if not record:
+        abort(400, {'error': 'This user does not exist in Odoo'})
+    return record[0]["id"]
 
 
-def odoo_client(login, password):
+def odoo_client():
     return erppeek.Client(
         app.config["ODOO_URI"],
         app.config["ODOO_DB"],
-        login, password)
+        app.config["ODOO_USER"],
+        app.config["ODOO_PASSWORD"])
 
 
 @app.errorhandler(500)
@@ -70,8 +50,8 @@ def check():
 
 @app.route('/api/timesheet', methods=["POST"])
 def get_timesheet():
-    login, userid, pwd = current_user()
-    client = odoo_client(login, pwd)
+    client = odoo_client()
+    userid = current_user(client)
 
     if request.json is None:
         abort(400, {'error': 'request body not in JSON format'})
