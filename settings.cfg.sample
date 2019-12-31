@@ -1,0 +1,6 @@
+DEBUG = True
+SECRET_KEY = b'YOUR_KEY_HERE'
+ODOO_USER = 'admin'
+ODOO_PASSWORD = 'admin'
+ODOO_URI = 'http://localhost:8069'
+ODOO_DB = 'demo'
